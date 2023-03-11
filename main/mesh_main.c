@@ -196,9 +196,10 @@ void esp_mesh_p2p_tx_main(void *arg)
     data.tos = MESH_TOS_P2P;
     is_running = true;
     int idpic = 0;
-    uint8_t pkt_hdr[7];
+    uint8_t pkt_hdr[8];
     char *database64;
     size_t out_len;
+    int total = 0;
 
     ESP_LOGI(MESH_TAG, "Welcome to ESP-WIFI-MESH tx function");
     vTaskDelay(5000 / portTICK_PERIOD_MS);
@@ -214,48 +215,58 @@ void esp_mesh_p2p_tx_main(void *arg)
         }
         esp_mesh_get_routing_table((mesh_addr_t *) &route_table,
                 CONFIG_MESH_ROUTE_TABLE_SIZE * 6, &route_table_size);
-        //0:resolution 1:total_pkt 2:seq_pkt 3:seq_picture 4:size_MSB 5:size_MID 6:size_LSB 7-1459:payload//
+        //0:resolution 1:total_pkt 2-3:seq_pkt 4:seq_picture 5:size_MSB 6:size_MID 7:size_LSB 8-1459:payload//
         fb_one = esp_camera_fb_get();
         if(fb_one == NULL){
             vTaskDelay(10 / portTICK_PERIOD_MS);
+            ESP_LOGI(MESH_TAG,"Restarting now.");
+            fflush(stdout);
+            esp_restart();
             continue;
         }
         database64 = base64_encode(fb_one->buf, fb_one->len, &out_len);
         esp_camera_fb_return(fb_one);
 
-        if (out_len%1453 == 0 )
-            pkt_hdr[1] = out_len/1453;
+        if (out_len%1452 == 0 )
+            pkt_hdr[1] = out_len/1452;
         else
-            pkt_hdr[1] = (out_len/1453)+1;
+            pkt_hdr[1] = (out_len/1452)+1;
 
         pkt_hdr[0] = camera_config.frame_size;
-        pkt_hdr[3] = idpic;
-        pkt_hdr[4] = (out_len & 0xFF0000) >> 16;
-        pkt_hdr[5] = (out_len & 0x00FF00) >> 8;
-        pkt_hdr[6] = (out_len & 0x0000FF);
+        pkt_hdr[4] = idpic;
+        pkt_hdr[5] = (out_len & 0xFF0000) >> 16;
+        pkt_hdr[6] = (out_len & 0x00FF00) >> 8;
+        pkt_hdr[7] = (out_len & 0x0000FF);
 
         for (int i=0; i<pkt_hdr[1]; i++){
-            pkt_hdr[2] = i+1;
-            memcpy( data.data, pkt_hdr, 7);
+            pkt_hdr[2] = ((i+1+total) & 0xFF00) >> 8;
+            pkt_hdr[3] = ((i+1+total) & 0x00FF);
+            memcpy( data.data, pkt_hdr, 8);
             if ( i+1 == pkt_hdr[1])
-                memcpy( &data.data[7], &database64[i*1453], out_len-(1453*i));
+                memcpy( &data.data[8], &database64[i*1452], out_len-(1452*i));
             else
-                memcpy( &data.data[7], &database64[i*1453], 1453);
+                memcpy( &data.data[8], &database64[i*1452], 1452);
             err = esp_mesh_send(NULL, &data, 0, NULL, 0);
             if (err != ESP_OK)
                 ESP_LOGE(MESH_TAG, "send data fail");
             memset( data.data, ' ', 1460);
-            ESP_LOGI(MESH_TAG, "Send Picture %d total %d to Root", pkt_hdr[2], pkt_hdr[1]);
-            vTaskDelay(5000 / portTICK_PERIOD_MS);
+            ESP_LOGI(MESH_TAG, "Send Picture %d total %d to Root", i+1+total, pkt_hdr[1]);
+            vTaskDelay(10 / portTICK_PERIOD_MS);
         }
+
+        total = total + pkt_hdr[1];
 
         free(database64);
         idpic++;
-        if(idpic == 10){
+        if(idpic%30 == 0){
+            total = 0;
+        }
+        if(idpic == 256){
             idpic = 0;
+            total = 0;
         }
     
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
+        vTaskDelay(10 / portTICK_PERIOD_MS);
  
     }
     vTaskDelete(NULL);
