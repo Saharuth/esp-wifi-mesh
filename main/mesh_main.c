@@ -29,8 +29,8 @@
  *******************************************************/
 #define RX_SIZE          (1500)
 #define TX_SIZE          (1460)
-#define RT_SSID "Kalasai"
-#define RT_PASSWD "saizanaruk"
+#define RT_SSID "PAKAPORN_2.4G"
+#define RT_PASSWD "0873930740"
 #define MAX_HTTP_OUTPUT_BUFFER (2048)
 
 #define SEND_TO_SERVER  (1)
@@ -238,12 +238,10 @@ void esp_mesh_p2p_rx_main(void *arg)
     char output_buffer[MAX_HTTP_OUTPUT_BUFFER] = {0};   // Buffer to store response of http request
     int content_length = 0;
     esp_http_client_config_t config = {
-        .url = "http://192.168.1.46:5004/api/v1/picture",
+        .url = "http://192.168.1.45:5004/api/v1/picture_array",
         .event_handler = _http_event_handle,
     };
     esp_http_client_handle_t client = esp_http_client_init(&config);
-    esp_http_client_set_method(client, HTTP_METHOD_PUT);
-    esp_http_client_set_header(client, "Content-Type", "application/json");
     cJSON *root;
     cJSON *element;
     bool create_array = true;
@@ -274,7 +272,7 @@ void esp_mesh_p2p_rx_main(void *arg)
                 create_array = false;
             }
             element = cJSON_CreateObject();
-            cJSON_AddStringToObject(root, "api_key", "espmesh");
+            cJSON_AddStringToObject(element, "api_key", "espmesh");
             cJSON_AddNumberToObject(element, "node", idx);
             cJSON_AddStringToObject(element, "picture", pic);
             cJSON_AddNumberToObject(element, "resolution", rx_buf[0]);
@@ -286,16 +284,18 @@ void esp_mesh_p2p_rx_main(void *arg)
             rx_count++;
             if (rx_count == 10){
                 char *post_data = cJSON_Print(root);
+                esp_http_client_set_method(client, HTTP_METHOD_PUT);
+                esp_http_client_set_header(client, "Content-Type", "application/json");
                 err = esp_http_client_open(client, strlen(post_data));
                 int wlen = esp_http_client_write(client, post_data, strlen(post_data));
-                content_length = esp_http_client_fetch_headers(client);
-                int data_read = esp_http_client_read_response(client, output_buffer, MAX_HTTP_OUTPUT_BUFFER);
-                if (data_read >= 0) {
-                    ESP_LOGI(MESH_TAG, "HTTP POST Status = %d, content_length = %lld",
-                            esp_http_client_get_status_code(client),
-                            esp_http_client_get_content_length(client));
-                    //ESP_LOG_BUFFER_HEX(MESH_TAG, output_buffer, strlen(output_buffer));
-                }
+                // content_length = esp_http_client_fetch_headers(client);
+                // int data_read = esp_http_client_read_response(client, output_buffer, MAX_HTTP_OUTPUT_BUFFER);
+                // if (data_read >= 0) {
+                //     ESP_LOGI(MESH_TAG, "HTTP POST Status = %d, content_length = %lld",
+                //             esp_http_client_get_status_code(client),
+                //             esp_http_client_get_content_length(client));
+                //     //ESP_LOG_BUFFER_HEX(MESH_TAG, output_buffer, strlen(output_buffer));
+                // }
                 esp_http_client_close(client);
                 cJSON_free(post_data);
                 cJSON_Delete(root);
