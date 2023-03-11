@@ -230,7 +230,7 @@ void esp_mesh_p2p_rx_main(void *arg)
     data.data = rx_buf;
     data.size = RX_SIZE;
     is_running = true;
-    char pic[1453];
+    char pic[1452];
 
     ESP_LOGI(MESH_TAG, "Welcome to ESP-WIFI-MESH rx function");
 
@@ -261,10 +261,11 @@ void esp_mesh_p2p_rx_main(void *arg)
         }
         else{
             ESP_LOGW(MESH_TAG, "Recieve Picture From Node %d MAC:"MACSTR"", idx+1, MAC2STR(route_table[idx].addr));
-            //0:resolution 1:total_pkt 2:seq_pkt 3:seq_picture 4:size_MSB 5:size_MID 6:size_LSB 7-1459:payload//
-            int size_picture = (rx_buf[4] << 16) | (rx_buf[5] << 8) | (rx_buf[6] & 0x0000FF);
-            ESP_LOGI(MESH_TAG, "Picture %d Size:%d Total:%d Seq:%d", rx_buf[3], size_picture, rx_buf[1], rx_buf[2]);
-            memcpy( pic, &rx_buf[7], 1453);
+            //0:resolution 1:total_pkt 2-3:seq_pkt 4:seq_picture 5:size_MSB 6:size_MID 7:size_LSB 8-1459:payload//
+            int size_picture = (rx_buf[5] << 16) | (rx_buf[6] << 8) | (rx_buf[7] & 0x0000FF);
+            int seq_total = (rx_buf[2] << 8) | (rx_buf[3] & 0x00FF);
+            ESP_LOGI(MESH_TAG, "Picture %d Size:%d Total:%d Seq:%d", rx_buf[4], size_picture, rx_buf[1], seq_total);
+            memcpy( pic, &rx_buf[8], 1452);
             //printf("%s\n",pic); //Show Information of Picture via Monitor
 #if SEND_TO_SERVER
             if(create_array){
@@ -277,10 +278,11 @@ void esp_mesh_p2p_rx_main(void *arg)
             cJSON_AddStringToObject(element, "picture", pic);
             cJSON_AddNumberToObject(element, "resolution", rx_buf[0]);
             cJSON_AddNumberToObject(element, "total_pkt", rx_buf[1]);
-            cJSON_AddNumberToObject(element, "seq_pkt", rx_buf[2]);
-            cJSON_AddNumberToObject(element, "seq_picture", rx_buf[3]);
+            cJSON_AddNumberToObject(element, "seq_pkt", seq_total);
+            cJSON_AddNumberToObject(element, "seq_picture", rx_buf[4]);
             cJSON_AddNumberToObject(element, "size", size_picture);
             cJSON_AddItemToArray(root, element);
+            memset( pic, ' ', 1452);
             rx_count++;
             if (rx_count == 10){
                 char *post_data = cJSON_Print(root);
@@ -342,7 +344,7 @@ esp_err_t esp_mesh_comm_p2p_start(void)
         is_comm_p2p_started = true;
         esp_err_t err = (init_camera());
         xTaskCreate(esp_mesh_p2p_tx_main, "MPTX", 3072, NULL, 5, NULL);
-        xTaskCreate(esp_mesh_p2p_rx_main, "MPRX", 6144, NULL, 5, NULL);
+        xTaskCreate(esp_mesh_p2p_rx_main, "MPRX", 20480, NULL, 5, NULL);
     }
     return ESP_OK;
 }
